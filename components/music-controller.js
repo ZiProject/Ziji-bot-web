@@ -67,6 +67,7 @@ export function MusicController() {
 	const { data: session, status } = useSession();
 	const { toast } = useToast();
 	const progressInterval = useRef(null);
+	const [searchHistory, setSearchHistory] = useState([]);
 
 	useEffect(() => {
 		if (session?.accessToken) {
@@ -136,6 +137,14 @@ export function MusicController() {
 		return () => clearInterval(progressInterval.current);
 	}, [playerStats.isPlaying]);
 
+	useEffect(() => {
+		// Load search history from localStorage when component mounts
+		const savedHistory = localStorage.getItem("searchHistory");
+		if (savedHistory) {
+			setSearchHistory(JSON.parse(savedHistory));
+		}
+	}, []);
+
 	const sendCommand = useCallback(
 		(command, payload = {}) => {
 			if (socket?.readyState === WebSocket.OPEN) {
@@ -163,6 +172,8 @@ export function MusicController() {
 	);
 
 	const handleSearch = useCallback(async () => {
+		if (!searchQuery.trim()) return;
+
 		try {
 			const searchUrl = `${
 				process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_WEBSOCKET_URL
@@ -178,6 +189,14 @@ export function MusicController() {
 
 			const data = await response.json();
 			setSearchResults(data);
+
+			// Add to search history
+			const newHistory = [searchQuery, ...searchHistory.filter((q) => q !== searchQuery)].slice(
+				0,
+				5,
+			);
+			setSearchHistory(newHistory);
+			localStorage.setItem("searchHistory", JSON.stringify(newHistory));
 		} catch (error) {
 			console.error("Search error:", error);
 			toast({
@@ -186,7 +205,7 @@ export function MusicController() {
 				variant: "destructive",
 			});
 		}
-	}, [searchQuery, toast]);
+	}, [searchQuery, searchHistory, toast]);
 
 	const handleSearchCancel = () => {
 		setSearchResults([]);
@@ -214,14 +233,10 @@ export function MusicController() {
 					shareLink = `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`;
 					break;
 				case "twitter":
-					shareLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-						shareText,
-					)}&url=${shareUrl}`;
+					shareLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${shareUrl}`;
 					break;
 				case "whatsapp":
-					shareLink = `https://wa.me/?text=${encodeURIComponent(
-						shareText + " " + decodeURIComponent(shareUrl),
-					)}`;
+					shareLink = `https://wa.me/?text=${encodeURIComponent(shareText + " " + decodeURIComponent(shareUrl))}`;
 					break;
 				case "copy":
 					navigator.clipboard.writeText(`${decodeURIComponent(shareUrl)}`);
@@ -235,6 +250,21 @@ export function MusicController() {
 		},
 		[toast],
 	);
+
+	const clearSearchHistory = () => {
+		setSearchHistory([]);
+		localStorage.removeItem("searchHistory");
+		toast({
+			title: "Search History Cleared",
+			description: "Your search history has been cleared.",
+		});
+	};
+
+	// Add this new function to handle clicking on a history item
+	const handleHistoryClick = (query) => {
+		setSearchQuery(query);
+		handleSearch();
+	};
 
 	if (status === "loading") {
 		return <Loading />;
@@ -253,39 +283,64 @@ export function MusicController() {
 				<div className='rounded-2xl p-px bg-gradient-to-br  from-[hsl(var(--gradient-start))] to-[hsl(var(--gradient-end))] dark:from-[hsl(var(--dark-gradient-start))] dark:to-[hsl(var(--dark-gradient-end))]'>
 					<Card className='rounded-[calc(1.0rem-1px)]  bg-slate-50 dark:bg-slate-950'>
 						<CardHeader>
-							<div className='relative'>
-								<Input
-									type='text'
-									placeholder='Search for music...'
-									value={searchQuery}
-									onChange={(e) => setSearchQuery(e.target.value)}
-									onKeyPress={(event) => {
-										if (event.key === "Enter") {
-											return handleSearch();
-										}
-									}}
-									className='pr-10'
-								/>
-								{searchResults.length <= 0 ? (
-									<Button
-										size='sm'
-										variant='ghost'
-										className='absolute right-0 top-1/2 transform -translate-y-1/2'
-										onClick={handleSearch}>
-										<FaSearch className='h-4 w-4' />
-									</Button>
-								) : (
-									<Button
-										size='sm'
-										variant='ghost'
-										className='absolute right-0 top-1/2 transform -translate-y-1/2'
-										onClick={handleSearchCancel}>
-										<FaXmark className='h-4 w-4' />
-									</Button>
+							<div className='space-y-4'>
+								<div className='relative'>
+									<Input
+										type='text'
+										placeholder='Search for music...'
+										value={searchQuery}
+										onChange={(e) => setSearchQuery(e.target.value)}
+										onKeyPress={(event) => {
+											if (event.key === "Enter") {
+												return handleSearch();
+											}
+										}}
+										className='pr-10'
+									/>
+									{searchResults.length <= 0 ?
+										<Button
+											size='sm'
+											variant='ghost'
+											className='absolute right-0 top-1/2 transform -translate-y-1/2'
+											onClick={handleSearch}>
+											<FaSearch className='h-4 w-4' />
+										</Button>
+									:	<Button
+											size='sm'
+											variant='ghost'
+											className='absolute right-0 top-1/2 transform -translate-y-1/2'
+											onClick={handleSearchCancel}>
+											<FaXmark className='h-4 w-4' />
+										</Button>
+									}
+								</div>
+								{searchHistory.length > 0 && !searchResults.length && (
+									<div className='space-y-2'>
+										<div className='flex items-center justify-between'>
+											<h4 className='text-sm font-medium'>Recent Searches</h4>
+											<Button
+												size='sm'
+												variant='ghost'
+												onClick={clearSearchHistory}>
+												Clear History
+											</Button>
+										</div>
+										<div className='flex flex-wrap gap-2'>
+											{searchHistory.map((query, index) => (
+												<Badge
+													key={index}
+													variant='secondary'
+													className='cursor-pointer hover:bg-secondary/80'
+													onClick={() => handleHistoryClick(query)}>
+													{query}
+												</Badge>
+											))}
+										</div>
+									</div>
 								)}
 							</div>
 						</CardHeader>
-						{searchResults.length > 0 ? (
+						{searchResults.length > 0 ?
 							<CardContent>
 								<h3 className='text-lg font-semibold mb-4'>Search Results</h3>
 								<ScrollArea className='h-[624px] pr-4'>
@@ -330,8 +385,7 @@ export function MusicController() {
 									</div>
 								</ScrollArea>
 							</CardContent>
-						) : (
-							<CardContent>
+						:	<CardContent>
 								<h3 className='text-lg font-semibold mb-4 text-center'>
 									Queue in {guildInfo?.name}
 								</h3>
@@ -420,7 +474,7 @@ export function MusicController() {
 									</div>
 								</ScrollArea>
 							</CardContent>
-						)}
+						}
 					</Card>
 				</div>
 			</div>
@@ -471,11 +525,9 @@ export function MusicController() {
 											variant='default'
 											size='icon'
 											onClick={() => sendCommand("pause")}>
-											{playerStats.isPlaying ? (
+											{playerStats.isPlaying ?
 												<FaPause className='h-4 w-4' />
-											) : (
-												<FaPlay className='h-4 w-4' />
-											)}
+											:	<FaPlay className='h-4 w-4' />}
 										</Button>
 										<Button
 											variant='ghost'
