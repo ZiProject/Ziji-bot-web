@@ -63,6 +63,7 @@ export function MusicController() {
 	});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchResults, setSearchResults] = useState([]);
+	const [lyrics, setLyrics] = useState([]);
 	const [showLyrics, setShowLyrics] = useState(false);
 	const { data: session, status } = useSession();
 	const { toast } = useToast();
@@ -209,6 +210,33 @@ export function MusicController() {
 
 	const handleSearchCancel = () => {
 		setSearchResults([]);
+	};
+
+	const handleLyrics = async () => {
+		// Open lyrics page
+		const searchUrl = `${
+			process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_WEBSOCKET_URL
+		}/api/lyrics?query=${encodeURIComponent(playerStats.currentTrack.title)}`;
+		const proxyUrl = `/api/proxy?url=${encodeURIComponent(searchUrl)}`;
+		const response = await fetch(proxyUrl);
+
+		if (!response.ok) {
+			const errorData = await response.json();
+			throw new Error(errorData.error || "Search failed");
+		}
+
+		const data = await response.json();
+		if (!data.length) return;
+		let lyrics = data?.at(0);
+
+		for (d of data) {
+			if (d.syncedLyrics) {
+				lyrics = d;
+				break;
+			}
+		}
+
+		setLyrics(data);
 	};
 
 	const formatTime = (ms) => {
@@ -580,7 +608,7 @@ export function MusicController() {
 										<Button
 											variant={showLyrics ? "default" : "ghost"}
 											size='icon'
-											onClick={() => setShowLyrics(!showLyrics)}>
+											onClick={() => handleLyrics()}>
 											<FaMusic className='h-4 w-4' />
 										</Button>
 									</div>
