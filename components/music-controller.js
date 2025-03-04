@@ -43,6 +43,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function MusicController() {
 	const [connectionStatus, setConnectionStatus] = useState("Connecting");
@@ -64,7 +65,6 @@ export function MusicController() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchResults, setSearchResults] = useState([]);
 	const [lyrics, setLyrics] = useState([]);
-	const [showLyrics, setShowLyrics] = useState(false);
 	const { data: session, status } = useSession();
 	const { toast } = useToast();
 	const progressInterval = useRef(null);
@@ -213,30 +213,43 @@ export function MusicController() {
 	};
 
 	const handleLyrics = async () => {
-		// Open lyrics page
-		const searchUrl = `${
-			process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_WEBSOCKET_URL
-		}/api/lyrics?query=${encodeURIComponent(playerStats.currentTrack.title)}`;
-		const proxyUrl = `/api/proxy?url=${encodeURIComponent(searchUrl)}`;
-		const response = await fetch(proxyUrl);
+		try {
+			const searchUrl = `${
+				process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_WEBSOCKET_URL
+			}/api/lyrics?query=${encodeURIComponent(playerStats.currentTrack.title)}`;
+			const proxyUrl = `/api/proxy?url=${encodeURIComponent(searchUrl)}`;
+			const response = await fetch(proxyUrl);
 
-		if (!response.ok) {
-			const errorData = await response.json();
-			throw new Error(errorData.error || "Search failed");
-		}
-
-		const data = await response.json();
-		if (!data.length) return;
-		let lyrics = data?.at(0);
-
-		for (d of data) {
-			if (d.syncedLyrics) {
-				lyrics = d;
-				break;
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || "Search failed");
 			}
-		}
 
-		setLyrics(data);
+			const data = await response.json();
+			if (!data.length) {
+				toast({
+					title: "No lyrics found",
+					description: "No lyrics were found for this track.",
+					variant: "destructive",
+				});
+				return;
+			}
+
+			setLyrics(data);
+
+			// Switch to lyrics tab
+			const lyricsTab = document.querySelector('[data-state="inactive"][value="lyrics"]');
+			if (lyricsTab) {
+				lyricsTab.click();
+			}
+		} catch (error) {
+			console.error("Lyrics error:", error);
+			toast({
+				title: "Error",
+				description: "Failed to fetch lyrics. Please try again.",
+				variant: "destructive",
+			});
+		}
 	};
 
 	const formatTime = (ms) => {
@@ -308,208 +321,262 @@ export function MusicController() {
 				className={
 					playerStats.currentTrack ? "md:col-span-2 space-y-6" : "md:col-span-3 space-y-6"
 				}>
-				<div className='rounded-2xl p-px bg-gradient-to-br  from-[hsl(var(--gradient-start))] to-[hsl(var(--gradient-end))] dark:from-[hsl(var(--dark-gradient-start))] dark:to-[hsl(var(--dark-gradient-end))]'>
-					<Card className='rounded-[calc(1.0rem-1px)]  bg-slate-50 dark:bg-slate-950'>
-						<CardHeader>
-							<div className='space-y-4'>
-								<div className='relative'>
-									<Input
-										type='text'
-										placeholder='Search for music...'
-										value={searchQuery}
-										onChange={(e) => setSearchQuery(e.target.value)}
-										onKeyPress={(event) => {
-											if (event.key === "Enter") {
-												return handleSearch();
-											}
-										}}
-										className='pr-10'
-									/>
-									{searchResults.length <= 0 ?
-										<Button
-											size='sm'
-											variant='ghost'
-											className='absolute right-0 top-1/2 transform -translate-y-1/2'
-											onClick={handleSearch}>
-											<FaSearch className='h-4 w-4' />
-										</Button>
-									:	<Button
-											size='sm'
-											variant='ghost'
-											className='absolute right-0 top-1/2 transform -translate-y-1/2'
-											onClick={handleSearchCancel}>
-											<FaXmark className='h-4 w-4' />
-										</Button>
-									}
-								</div>
-								{searchHistory.length > 0 && !searchResults.length && (
-									<div className='space-y-2'>
-										<div className='flex items-center justify-between'>
-											<h4 className='text-sm font-medium'>Recent Searches</h4>
-											<Button
-												size='sm'
-												variant='ghost'
-												onClick={clearSearchHistory}>
-												Clear History
-											</Button>
+				<Tabs
+					defaultValue='queue'
+					className='w-full'>
+					<TabsList className='grid w-full grid-cols-3 mb-4'>
+						<TabsTrigger value='queue'>Queue</TabsTrigger>
+						<TabsTrigger value='search'>Search</TabsTrigger>
+						<TabsTrigger value='lyrics'>Lyrics</TabsTrigger>
+					</TabsList>
+
+					<div className='rounded-2xl p-px bg-gradient-to-br from-[hsl(var(--gradient-start))] to-[hsl(var(--gradient-end))] dark:from-[hsl(var(--dark-gradient-start))] dark:to-[hsl(var(--dark-gradient-end))]'>
+						<Card className='rounded-[calc(1.0rem-1px)] bg-slate-50 dark:bg-slate-950 h-[700px]'>
+							<CardContent className='p-6'>
+								<TabsContent
+									value='queue'
+									className='h-full'>
+									<h3 className='text-lg font-semibold mb-4 text-center'>
+										Queue in {guildInfo?.name}
+									</h3>
+									{!playerStats.playlist.length && (
+										<div className='flex justify-center items-center h-[200px]'>
+											Không có bài hát nào trong hàng đợi
 										</div>
-										<div className='flex flex-wrap gap-2'>
-											{searchHistory.map((query, index) => (
-												<Badge
+									)}
+									<ScrollArea className='h-[600px] pr-4'>
+										<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto'>
+											{playerStats.playlist.map((track, index) => (
+												<Card
 													key={index}
-													variant='secondary'
-													className='cursor-pointer hover:bg-secondary/80'
-													onClick={() => handleHistoryClick(query)}>
-													{query}
-												</Badge>
-											))}
-										</div>
-									</div>
-								)}
-							</div>
-						</CardHeader>
-						{searchResults.length > 0 ?
-							<CardContent>
-								<h3 className='text-lg font-semibold mb-4'>Search Results</h3>
-								<ScrollArea className='h-[624px] pr-4'>
-									<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-										{searchResults.map((track, index) => (
-											<Card
-												key={index}
-												className='backdrop-blur-sm bg-background/80 dark:bg-background/40 flex'>
-												<img
-													src={track.thumbnail || session.user?.image_url}
-													alt={track.title}
-													className='w-24 h-24 object-cover'
-												/>
-												<div className='flex-1 p-4'>
-													<h4 className='font-medium line-clamp-1'>{track.title}</h4>
-													<p className='text-sm text-muted-foreground'>
-														{track.duration} - {track.artist || track.author}
-													</p>
-													<div className='flex gap-2 mt-2'>
+													className='overflow-hidden'>
+													<CardContent className='p-0'>
+														<img
+															src={track.thumbnail || session.user?.image_url}
+															alt={track.title}
+															className='w-full h-32 object-cover'
+														/>
+													</CardContent>
+													<CardHeader className='p-4'>
+														<CardTitle className='text-sm line-clamp-1'>{track.title}</CardTitle>
+														<CardDescription className='text-xs'>
+															<h4 className='font-medium line-clamp-1'>
+																{track.artist || track.author}
+															</h4>
+															{track.duration}
+														</CardDescription>
+													</CardHeader>
+													<CardFooter className='p-4 flex justify-between'>
 														<Button
-															size='sm'
 															variant='ghost'
-															onClick={() => sendCommand("play", { trackUrl: track.url })}>
+															size='icon'
+															onClick={() =>
+																sendCommand("Playnext", {
+																	TrackPosition: index + 1,
+																	trackUrl: track.url,
+																})
+															}>
 															<FaPlay className='h-4 w-4' />
 														</Button>
-														<TooltipProvider>
-															<Button
-																size='sm'
-																variant='ghost'>
-																<Tooltip>
-																	<TooltipTrigger asChild>
-																		<FaHeart className='h-4 w-4' />
-																	</TooltipTrigger>
-																	<TooltipContent>Add to Favorites</TooltipContent>
-																</Tooltip>
-															</Button>
-														</TooltipProvider>
-													</div>
-												</div>
-											</Card>
-										))}
-									</div>
-								</ScrollArea>
-							</CardContent>
-						:	<CardContent>
-								<h3 className='text-lg font-semibold mb-4 text-center'>
-									Queue in {guildInfo?.name}
-								</h3>
-								{!playerStats.playlist.length && (
-									<div className='flex justify-center items-center h-full'>
-										Không có bài hát nào trong hàng đợi
-									</div>
-								)}
-								<ScrollArea className='h-[628px] pr-4'>
-									<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto'>
-										{playerStats.playlist.map((track, index) => (
-											<Card
-												key={index}
-												className='overflow-hidden'>
-												<CardContent className='p-0'>
-													<img
-														src={track.thumbnail || session.user?.image_url}
-														alt={track.title}
-														className='w-full h-32 object-cover'
-													/>
-												</CardContent>
-												<CardHeader className='p-4'>
-													<CardTitle className='text-sm line-clamp-1'>{track.title}</CardTitle>
-													<CardDescription className='text-xs'>
-														<h4 className='font-medium line-clamp-1'>
-															{track.artist || track.author}
-														</h4>
-														{track.duration}
-													</CardDescription>
-												</CardHeader>
-												<CardFooter className='p-4 flex justify-between'>
-													<Button
-														variant='ghost'
-														size='icon'
-														onClick={() =>
-															sendCommand("Playnext", {
-																TrackPosition: index + 1,
-																trackUrl: track.url,
-															})
-														}>
-														<FaPlay className='h-4 w-4' />
-													</Button>
-													<div className='flex gap-2'>
-														<TooltipProvider>
-															<Button
-																variant='ghost'
-																size='icon'
-																onClick={() =>
-																	sendCommand("DelTrack", { TrackPosition: index + 1 })
-																}>
-																<Tooltip>
-																	<TooltipTrigger asChild>
-																		<FaTrash className='h-4 w-4' />
-																	</TooltipTrigger>
-																	<TooltipContent>Remove from Queue</TooltipContent>
-																</Tooltip>
-															</Button>
-														</TooltipProvider>
-														<DropdownMenu>
-															<DropdownMenuTrigger asChild>
+														<div className='flex gap-2'>
+															<TooltipProvider>
 																<Button
 																	variant='ghost'
-																	size='icon'>
-																	<FaShareAlt className='h-4 w-4' />
+																	size='icon'
+																	onClick={() =>
+																		sendCommand("DelTrack", { TrackPosition: index + 1 })
+																	}>
+																	<Tooltip>
+																		<TooltipTrigger asChild>
+																			<FaTrash className='h-4 w-4' />
+																		</TooltipTrigger>
+																		<TooltipContent>Remove from Queue</TooltipContent>
+																	</Tooltip>
 																</Button>
-															</DropdownMenuTrigger>
-															<DropdownMenuContent>
-																<DropdownMenuItem onClick={() => handleShare("facebook", track)}>
-																	<FaFacebook className='mr-2 h-4 w-4' /> Facebook
-																</DropdownMenuItem>
-																<DropdownMenuItem onClick={() => handleShare("twitter", track)}>
-																	<FaTwitter className='mr-2 h-4 w-4' /> Twitter
-																</DropdownMenuItem>
-																<DropdownMenuItem onClick={() => handleShare("whatsapp", track)}>
-																	<FaWhatsapp className='mr-2 h-4 w-4' /> WhatsApp
-																</DropdownMenuItem>
-																<DropdownMenuItem onClick={() => handleShare("copy", track)}>
-																	<FaLink className='mr-2 h-4 w-4' /> Copy Link
-																</DropdownMenuItem>
-															</DropdownMenuContent>
-														</DropdownMenu>
+															</TooltipProvider>
+															<DropdownMenu>
+																<DropdownMenuTrigger asChild>
+																	<Button
+																		variant='ghost'
+																		size='icon'>
+																		<FaShareAlt className='h-4 w-4' />
+																	</Button>
+																</DropdownMenuTrigger>
+																<DropdownMenuContent>
+																	<DropdownMenuItem onClick={() => handleShare("facebook", track)}>
+																		<FaFacebook className='mr-2 h-4 w-4' /> Facebook
+																	</DropdownMenuItem>
+																	<DropdownMenuItem onClick={() => handleShare("twitter", track)}>
+																		<FaTwitter className='mr-2 h-4 w-4' /> Twitter
+																	</DropdownMenuItem>
+																	<DropdownMenuItem onClick={() => handleShare("whatsapp", track)}>
+																		<FaWhatsapp className='mr-2 h-4 w-4' /> WhatsApp
+																	</DropdownMenuItem>
+																	<DropdownMenuItem onClick={() => handleShare("copy", track)}>
+																		<FaLink className='mr-2 h-4 w-4' /> Copy Link
+																	</DropdownMenuItem>
+																</DropdownMenuContent>
+															</DropdownMenu>
+														</div>
+													</CardFooter>
+												</Card>
+											))}
+										</div>
+									</ScrollArea>
+								</TabsContent>
+
+								<TabsContent
+									value='search'
+									className='h-full'>
+									<div className='space-y-4'>
+										<div className='relative'>
+											<Input
+												type='text'
+												placeholder='Search for music...'
+												value={searchQuery}
+												onChange={(e) => setSearchQuery(e.target.value)}
+												onKeyPress={(event) => {
+													if (event.key === "Enter") {
+														return handleSearch();
+													}
+												}}
+												className='pr-10'
+											/>
+											{searchResults.length <= 0 ?
+												<Button
+													size='sm'
+													variant='ghost'
+													className='absolute right-0 top-1/2 transform -translate-y-1/2'
+													onClick={handleSearch}>
+													<FaSearch className='h-4 w-4' />
+												</Button>
+											:	<Button
+													size='sm'
+													variant='ghost'
+													className='absolute right-0 top-1/2 transform -translate-y-1/2'
+													onClick={handleSearchCancel}>
+													<FaXmark className='h-4 w-4' />
+												</Button>
+											}
+										</div>
+
+										{searchHistory.length > 0 && !searchResults.length && (
+											<div className='space-y-2'>
+												<div className='flex items-center justify-between'>
+													<h4 className='text-sm font-medium'>Recent Searches</h4>
+													<Button
+														size='sm'
+														variant='ghost'
+														onClick={clearSearchHistory}>
+														Clear History
+													</Button>
+												</div>
+												<div className='flex flex-wrap gap-2'>
+													{searchHistory.map((query, index) => (
+														<Badge
+															key={index}
+															variant='secondary'
+															className='cursor-pointer hover:bg-secondary/80'
+															onClick={() => handleHistoryClick(query)}>
+															{query}
+														</Badge>
+													))}
+												</div>
+											</div>
+										)}
+										<ScrollArea className='h-[550px] pr-4'>
+											{searchResults.length > 0 && (
+												<>
+													<h3 className='text-lg font-semibold mb-4'>Search Results</h3>
+
+													<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+														{searchResults.map((track, index) => (
+															<Card
+																key={index}
+																className='backdrop-blur-sm bg-background/80 dark:bg-background/40 flex'>
+																<img
+																	src={track.thumbnail || session.user?.image_url}
+																	alt={track.title}
+																	className='w-24 h-24 object-cover'
+																/>
+																<div className='flex-1 p-4'>
+																	<h4 className='font-medium line-clamp-1'>{track.title}</h4>
+																	<p className='text-sm text-muted-foreground'>
+																		{track.duration} - {track.artist || track.author}
+																	</p>
+																	<div className='flex gap-2 mt-2'>
+																		<Button
+																			size='sm'
+																			variant='ghost'
+																			onClick={() => sendCommand("play", { trackUrl: track.url })}>
+																			<FaPlay className='h-4 w-4' />
+																		</Button>
+																		<TooltipProvider>
+																			<Button
+																				size='sm'
+																				variant='ghost'>
+																				<Tooltip>
+																					<TooltipTrigger asChild>
+																						<FaHeart className='h-4 w-4' />
+																					</TooltipTrigger>
+																					<TooltipContent>Add to Favorites</TooltipContent>
+																				</Tooltip>
+																			</Button>
+																		</TooltipProvider>
+																	</div>
+																</div>
+															</Card>
+														))}
 													</div>
-												</CardFooter>
-											</Card>
-										))}
+												</>
+											)}
+										</ScrollArea>
 									</div>
-								</ScrollArea>
+								</TabsContent>
+
+								<TabsContent
+									value='lyrics'
+									className='h-full'>
+									<ScrollArea className='h-[600px] pr-4'>
+										{lyrics.length > 0 ?
+											lyrics.map((lyric, index) => (
+												<div className='ml-6'>
+													<h3 className='text-lg font-semibold mb-2 text-center'>{lyric.name}</h3>
+													<h4 className='text-sm font-semibold mb-4 text-center'>
+														{lyric.artistName}
+													</h4>
+													{lyric.syncedLyrics ?
+														<div className='whitespace-pre-line'>{lyric.syncedLyrics}</div>
+													:	<div className='whitespace-pre-line'>{lyric.plainLyrics}</div>}
+												</div>
+											))
+										:	<div className='flex flex-col items-center justify-center h-[300px]'>
+												<FaMusic className='h-12 w-12 mb-4 text-muted-foreground' />
+												<p className='text-muted-foreground'>
+													{playerStats.currentTrack ?
+														"Click the lyrics button to load lyrics for the current track"
+													:	"No track is currently playing"}
+												</p>
+												{playerStats.currentTrack && (
+													<Button
+														className='mt-4'
+														onClick={handleLyrics}>
+														Load Lyrics
+													</Button>
+												)}
+											</div>
+										}
+									</ScrollArea>
+								</TabsContent>
 							</CardContent>
-						}
-					</Card>
-				</div>
+						</Card>
+					</div>
+				</Tabs>
 			</div>
 			{playerStats.currentTrack && (
 				<div className='md:col-span-1'>
 					<div className='rounded-2xl p-px bg-gradient-to-br  from-[hsl(var(--gradient-start))] to-[hsl(var(--gradient-end))] dark:from-[hsl(var(--dark-gradient-start))] dark:to-[hsl(var(--dark-gradient-end))]'>
-						<Card className='rounded-[calc(1.0rem-1px)]  bg-slate-50 dark:bg-slate-950'>
+						<Card className='rounded-[calc(1.0rem-1px)] bg-slate-50 dark:bg-slate-950 h-[750px]'>
 							<CardHeader>
 								<CardTitle>
 									Now Playing {voiceChannel && `in ${voiceChannel.name}`}
@@ -522,11 +589,11 @@ export function MusicController() {
 							</CardHeader>
 							<CardContent>
 								<div className='space-y-6'>
-									<div className='aspect-square relative rounded-lg overflow-hidden'>
+									<div className='relative rounded-lg overflow-hidden'>
 										<img
 											src={playerStats.currentTrack.thumbnail || session.user?.image_url}
 											alt={playerStats.currentTrack.title}
-											className='object-cover w-full h-full'
+											className='object-cover w-full h-full max-h-96'
 										/>
 									</div>
 
@@ -606,23 +673,12 @@ export function MusicController() {
 											</Tooltip>
 										</TooltipProvider>
 										<Button
-											variant={showLyrics ? "default" : "ghost"}
+											variant='ghost'
 											size='icon'
 											onClick={() => handleLyrics()}>
 											<FaMusic className='h-4 w-4' />
 										</Button>
 									</div>
-
-									{showLyrics && playerStats.currentTrack.lyrics && (
-										<ScrollArea className='h-[200px]'>
-											<div className='space-y-2'>
-												<h4 className='font-semibold'>Lyrics</h4>
-												<p className='whitespace-pre-line text-sm'>
-													{playerStats.currentTrack.lyrics?.plainLyrics}
-												</p>
-											</div>
-										</ScrollArea>
-									)}
 								</div>
 							</CardContent>
 						</Card>
