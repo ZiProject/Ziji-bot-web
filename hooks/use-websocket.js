@@ -120,6 +120,21 @@ export function useWebSocket() {
 		},
 		[sendCommand],
 	);
+	const handleSeekChange = useCallback((value) => {
+		setPlayerStats((prev) => ({
+			...prev,
+			duration: {
+				...prev.duration,
+				current: (value[0] / 100) * prev.duration.total,
+			},
+		}));
+	});
+	const handleSeekCommit = useCallback(
+		(value) => {
+			sendCommand("seek", { position: (value[0] / 100) * playerStats.duration.total });
+		},
+		[playerStats, sendCommand],
+	);
 
 	return {
 		connectionStatus,
@@ -130,5 +145,7 @@ export function useWebSocket() {
 		sendCommand,
 		handleVolumeChange,
 		handleVolumeCommit,
+		handleSeekChange,
+		handleSeekCommit,
 	};
 }

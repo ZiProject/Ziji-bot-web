@@ -23,6 +23,8 @@ export function PlayerControls({
 	sendCommand,
 	handleVolumeChange,
 	handleVolumeCommit,
+	handleSeekChange,
+	handleSeekCommit,
 	handleLyrics,
 	session,
 }) {
@@ -60,7 +62,14 @@ export function PlayerControls({
 								</p>
 							</div>
 
-							<Progress value={(playerStats.duration.current / playerStats.duration.total) * 100} />
+							{/* <Progress value={} /> */}
+							<Slider
+								value={[(playerStats.duration.current / playerStats.duration.total) * 100]}
+								onValueChange={handleSeekChange}
+								onValueCommit={handleSeekCommit}
+								max={100}
+								step={1}
+							/>
 
 							<div className='flex justify-center items-center gap-4'>
 								<Button

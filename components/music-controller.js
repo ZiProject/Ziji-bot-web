@@ -30,6 +30,8 @@ export function MusicController() {
 		sendCommand,
 		handleVolumeChange,
 		handleVolumeCommit,
+		handleSeekChange,
+		handleSeekCommit,
 	} = useWebSocket();
 
 	const {
@@ -132,6 +134,8 @@ export function MusicController() {
 					sendCommand={sendCommand}
 					handleVolumeChange={handleVolumeChange}
 					handleVolumeCommit={handleVolumeCommit}
+					handleSeekChange={handleSeekChange}
+					handleSeekCommit={handleSeekCommit}
 					handleLyrics={handleLyrics}
 					session={session}
 				/>
