@@ -12,8 +12,8 @@ export function useLyrics(currentTrack, currentTime) {
 	const { toast } = useToast()
 
 	useEffect(() => {
-		if (lyrics.length > 0 && lyrics[0].syncedLyrics) {
-			const syncedLyrics = lyrics[0].syncedLyrics
+		if (lyrics.length > 0 && lyrics[0].synced) {
+			const syncedLyrics = lyrics[0].synced
 			const parsed = parseSyncedLyrics(syncedLyrics)
 			setParsedLyrics(parsed)
 		} else {
